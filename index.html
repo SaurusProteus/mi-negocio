@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Mi Negocio</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root {
   --bg: #f4f2ee;
@@ -542,10 +543,24 @@ textarea { resize: vertical; min-height: 72px; }
       <select class="filter-select" id="inv-cat" onchange="renderInventario()">
         <option value="">Todas las categorías</option>
       </select>
+      <button class="btn btn-secondary" onclick="downloadTemplate()" title="Descarga la plantilla Excel para llenar tus productos">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Plantilla Excel
+      </button>
+      <button class="btn btn-secondary" onclick="document.getElementById('xlsxInput').click()" title="Sube tu Excel con productos">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Importar Excel
+      </button>
+      <input type="file" id="xlsxInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="importExcel(this)"/>
       <button class="btn btn-primary" onclick="openProductModal()">
         <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Agregar producto
       </button>
+    </div>
+    <!-- Ayuda importación -->
+    <div id="import-help" style="display:none;background:var(--info-light);border:1px solid #b8d8f0;border-radius:var(--radius);padding:12px 16px;margin-bottom:14px;font-size:13px;color:var(--info)">
+      <strong>Importación completada.</strong> <span id="import-msg"></span>
+      <button onclick="document.getElementById('import-help').style.display='none'" style="float:right;background:none;border:none;cursor:pointer;color:var(--info);font-size:16px;line-height:1">×</button>
     </div>
     <div class="card">
       <div class="table-wrap">
@@ -1384,6 +1399,150 @@ function renderAnalisis(){
       <td style="color:var(--text2)">${c.credito>0?fmt(c.credito):'Sin límite'}</td>
     </tr>`).join('')
     :`<tr><td colspan="4"><div class="empty-state"><p>¡Todos los clientes están al corriente!</p></div></td></tr>`;
+}
+
+
+// ══════════════════════════════════════════════
+// EXCEL: DESCARGAR PLANTILLA
+// ══════════════════════════════════════════════
+function downloadTemplate(){
+  const headers = [
+    'ID_Producto','Nombre','Categoria','Costo','Precio_Publico','Precio_Descuento','Stock','Notas'
+  ];
+  const ejemplos = [
+    ['110283','Nutrilite Double X','Nutricion',480,720,650,5,'Multivitaminico premium. 1 toma diaria.'],
+    ['G0285','ARTISTRY Studio BB Cream','Belleza',290,430,390,8,'FPS 30, varios tonos.'],
+    ['A0512','AMWAY HOME Lavavajillas','Hogar',120,185,165,12,'Concentrado, rinde 2x mas.'],
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...ejemplos]);
+
+  // Anchos de columna
+  ws['!cols'] = [
+    {wch:14},{wch:36},{wch:18},{wch:10},{wch:16},{wch:18},{wch:8},{wch:40}
+  ];
+
+  // Estilo de encabezado (solo disponible en xlsx con estilos, usamos comentario aclaratorio)
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Productos');
+
+  // Hoja de instrucciones
+  const instrData = [
+    ['INSTRUCCIONES PARA LLENAR LA PLANTILLA'],
+    [''],
+    ['Columna','Descripcion','Ejemplo'],
+    ['ID_Producto','Codigo o numero de referencia del producto (puede ser el de Amway)','110283'],
+    ['Nombre','Nombre completo del producto','Nutrilite Double X'],
+    ['Categoria','Grupo al que pertenece: Nutricion, Belleza, Hogar, Cuidado personal, etc.','Nutricion'],
+    ['Costo','Cuanto te cuesta a ti (precio de distribuidor)','480'],
+    ['Precio_Publico','Precio al que lo vendes normalmente','720'],
+    ['Precio_Descuento','Precio especial o con descuento','650'],
+    ['Stock','Cuantas unidades tienes en tu inventario ahora mismo','5'],
+    ['Notas','Descripcion, beneficios, observaciones (opcional)','Tomar 1 al dia con alimentos'],
+    [''],
+    ['IMPORTANTE:'],
+    ['- No cambies los nombres de las columnas (primera fila)'],
+    ['- Puedes agregar o quitar filas de ejemplo, deja solo tus productos reales'],
+    ['- Los campos de precio y stock deben ser numeros sin simbolo de peso ($)'],
+    ['- Guarda el archivo como .xlsx antes de subirlo'],
+  ];
+  const wsInstr = XLSX.utils.aoa_to_sheet(instrData);
+  wsInstr['!cols'] = [{wch:18},{wch:55},{wch:35}];
+  XLSX.utils.book_append_sheet(wb, wsInstr, 'Instrucciones');
+
+  XLSX.writeFile(wb, 'plantilla-productos.xlsx');
+  toast('Plantilla descargada — ábrela en Excel y llena tus productos');
+}
+
+// ══════════════════════════════════════════════
+// EXCEL: IMPORTAR PRODUCTOS
+// ══════════════════════════════════════════════
+function importExcel(input){
+  const file = input.files[0];
+  if(!file){ return; }
+  input.value = ''; // reset para poder subir el mismo archivo de nuevo
+
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb   = XLSX.read(data, {type:'array'});
+
+      // Buscar la hoja "Productos" o usar la primera
+      const sheetName = wb.SheetNames.includes('Productos') ? 'Productos' : wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+
+      if(!rows.length){
+        toast('El archivo está vacío o no tiene datos');
+        return;
+      }
+
+      // Mapa flexible de columnas (acepta variaciones de nombre)
+      function getCol(row, ...keys){
+        for(const k of keys){
+          const found = Object.keys(row).find(c => c.trim().toLowerCase().replace(/[_\s]/g,'') === k.toLowerCase().replace(/[_\s]/g,''));
+          if(found !== undefined) return row[found];
+        }
+        return '';
+      }
+
+      let agregados=0, actualizados=0, omitidos=0;
+      const errores=[];
+
+      rows.forEach((row, i)=>{
+        const nombre = String(getCol(row,'Nombre','name','producto') || '').trim();
+        if(!nombre){ omitidos++; return; }
+
+        const sku    = String(getCol(row,'ID_Producto','ID','SKU','codigo','ref') || '').trim();
+        const cat    = String(getCol(row,'Categoria','categoria','category','cat') || '').trim();
+        const costo  = parseFloat(getCol(row,'Costo','costo','cost','precio_costo') || 0);
+        const pub    = parseFloat(getCol(row,'Precio_Publico','PrecioPublico','publico','precio_publico','precio') || 0);
+        const desc   = parseFloat(getCol(row,'Precio_Descuento','PrecioDescuento','descuento','precio_descuento') || pub);
+        const stock  = parseInt(getCol(row,'Stock','stock','inventario','existencia') || 0);
+        const notas  = String(getCol(row,'Notas','notas','descripcion','notes') || '').trim();
+
+        if(pub < costo && pub > 0){
+          errores.push(`Fila ${i+2}: "${nombre}" — precio público menor al costo`);
+        }
+
+        // Buscar si ya existe por SKU o nombre
+        const existingIdx = products.findIndex(p =>
+          (sku && p.sku === sku) || p.nombre.toLowerCase() === nombre.toLowerCase()
+        );
+
+        const obj = {
+          id: existingIdx >= 0 ? products[existingIdx].id : uid(),
+          sku, nombre, cat,
+          costo: costo || 0,
+          publico: pub || 0,
+          descuento: desc || pub || 0,
+          stock: stock || 0,
+          img: existingIdx >= 0 ? (products[existingIdx].img || '') : '',
+          notas,
+        };
+
+        if(existingIdx >= 0){ products[existingIdx] = obj; actualizados++; }
+        else { products.push(obj); agregados++; }
+      });
+
+      save('products', products);
+      renderInventario();
+
+      // Mostrar resultado
+      const msgEl = document.getElementById('import-msg');
+      let msg = `${agregados} producto${agregados!==1?'s':''} nuevo${agregados!==1?'s':''} agregado${agregados!==1?'s':''}, ${actualizados} actualizado${actualizados!==1?'s':''}.`;
+      if(omitidos) msg += ` ${omitidos} fila${omitidos!==1?'s':''} omitida${omitidos!==1?'s':''} (sin nombre).`;
+      if(errores.length) msg += `<br><strong>Avisos:</strong> ${errores.join(' · ')}`;
+      msgEl.innerHTML = msg;
+      document.getElementById('import-help').style.display = 'block';
+
+    } catch(err){
+      console.error(err);
+      toast('Error al leer el archivo. Asegúrate de que sea .xlsx o .csv');
+    }
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 // ── INIT ──
