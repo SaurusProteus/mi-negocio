@@ -410,6 +410,9 @@ textarea { resize: vertical; min-height: 72px; }
 .credit-track { flex: 1; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
 .credit-fill { height: 100%; border-radius: 3px; }
 
+.sort-icon { font-size: 10px; color: var(--text3); margin-left: 2px; }
+th:hover .sort-icon { color: var(--text2); }
+
 .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 99; }
 .sidebar-overlay.open { display: block; }
 </style>
@@ -489,14 +492,24 @@ textarea { resize: vertical; min-height: 72px; }
         <div class="stat-sub">en base de datos</div>
       </div>
       <div class="stat-card stat-gold">
-        <div class="stat-label">Pedidos del mes</div>
+        <div class="stat-label">Pedidos registrados</div>
         <div class="stat-value" id="stat-pedidos">0</div>
-        <div class="stat-sub">registrados</div>
+        <div class="stat-sub">en total</div>
       </div>
       <div class="stat-card stat-blue">
-        <div class="stat-label">Valor en inventario</div>
+        <div class="stat-label">Invertido en inventario</div>
         <div class="stat-value" id="stat-valor">$0</div>
-        <div class="stat-sub">precio de costo</div>
+        <div class="stat-sub">a precio de costo</div>
+      </div>
+      <div class="stat-card stat-green">
+        <div class="stat-label">Ganancia potencial</div>
+        <div class="stat-value" id="stat-ganancia-pot">$0</div>
+        <div class="stat-sub" id="stat-ganancia-pot-sub">si vendes todo al público</div>
+      </div>
+      <div class="stat-card" style="border-color:#c5d9cb;background:var(--accent-light)">
+        <div class="stat-label" style="color:var(--accent)">Valor total al público</div>
+        <div class="stat-value" id="stat-valor-pub" style="color:var(--accent)">$0</div>
+        <div class="stat-sub">ingresos si vendes todo</div>
       </div>
     </div>
 
@@ -565,7 +578,17 @@ textarea { resize: vertical; min-height: 72px; }
     <div class="card">
       <div class="table-wrap">
         <table>
-          <thead><tr><th>ID</th><th>Producto</th><th>Categoría</th><th>Stock</th><th>Costo</th><th>Precio público</th><th>Descuento</th><th>Ganancia</th><th></th></tr></thead>
+          <thead><tr>
+            <th onclick="sortInv('sku')" style="cursor:pointer;user-select:none">ID <span id="sort-sku" class="sort-icon"></span></th>
+            <th onclick="sortInv('nombre')" style="cursor:pointer;user-select:none">Producto <span id="sort-nombre" class="sort-icon"></span></th>
+            <th onclick="sortInv('cat')" style="cursor:pointer;user-select:none">Categoría <span id="sort-cat" class="sort-icon"></span></th>
+            <th onclick="sortInv('stock')" style="cursor:pointer;user-select:none">Stock <span id="sort-stock" class="sort-icon"></span></th>
+            <th onclick="sortInv('puntos')" style="cursor:pointer;user-select:none">Puntos <span id="sort-puntos" class="sort-icon"></span></th>
+            <th onclick="sortInv('publico')" style="cursor:pointer;user-select:none">Precio público <span id="sort-publico" class="sort-icon"></span></th>
+            <th onclick="sortInv('descuento')" style="cursor:pointer;user-select:none">A mí me sale <span id="sort-descuento" class="sort-icon"></span></th>
+            <th onclick="sortInv('gain')" style="cursor:pointer;user-select:none">Ganancia <span id="sort-gain" class="sort-icon"></span></th>
+            <th></th>
+          </tr></thead>
           <tbody id="inv-tbody"></tbody>
         </table>
       </div>
@@ -691,21 +714,21 @@ textarea { resize: vertical; min-height: 72px; }
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Costo (precio para ti)</label>
-          <div class="input-prefix"><span>$</span><input type="number" id="mpCosto" placeholder="0.00" min="0" step="0.01" oninput="calcPreciosModal()"/></div>
+          <label>Puntos Amway</label>
+          <input type="number" id="mpPuntos" placeholder="Ej. 120" min="0" step="0.01"/>
         </div>
         <div class="form-group">
-          <label>% de ganancia</label>
-          <div class="input-prefix"><span>%</span><input type="number" id="mpPct" placeholder="30" min="0" max="300" oninput="calcPreciosModal()"/></div>
+          <label>Costo $ (lo que tú pagas)</label>
+          <div class="input-prefix"><span>$</span><input type="number" id="mpCosto" placeholder="0.00" min="0" step="0.01" oninput="calcPreciosModal()"/></div>
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Precio público (auto)</label>
+          <label>Precio público</label>
           <div class="input-prefix"><span>$</span><input type="number" id="mpPublico" placeholder="0.00" min="0" step="0.01" oninput="calcPctModal()"/></div>
         </div>
         <div class="form-group">
-          <label>Precio con descuento</label>
+          <label>A mí me sale (precio con descuento)</label>
           <div class="input-prefix"><span>$</span><input type="number" id="mpDescuento" placeholder="0.00" min="0" step="0.01"/></div>
         </div>
       </div>
@@ -835,34 +858,21 @@ let orders   = load('orders');
 // Datos de ejemplo si está vacío
 if(!products.length){
   products = [
-    {id:'p1',sku:'110283',nombre:'Nutrilite Double X',cat:'Nutrición',costo:480,publico:720,descuento:650,stock:5,img:'',notas:'Multivitamínico premium. 1 toma diaria.'},
-    {id:'p2',sku:'G0285',nombre:'ARTISTRY Studio BB Cream',cat:'Belleza',costo:290,publico:430,descuento:390,stock:8,img:'',notas:'FPS 30, varios tonos.'},
-    {id:'p3',sku:'110874',nombre:'Nutrilite Proteína en Polvo',cat:'Nutrición',costo:550,publico:820,descuento:750,stock:3,img:'',notas:'Sabor vainilla. 450g.'},
-    {id:'p4',sku:'A0512',nombre:'AMWAY HOME Lavavajillas',cat:'Hogar',costo:120,publico:185,descuento:165,stock:12,img:'',notas:'Concentrado, rinde 2x más.'},
-    {id:'p5',sku:'G0881',nombre:'ARTISTRY Crema Hidratante',cat:'Belleza',costo:380,publico:560,descuento:510,stock:6,img:'',notas:'Para piel normal a seca.'},
-    {id:'p6',sku:'110455',nombre:'Nutrilite Vitamina C',cat:'Nutrición',costo:160,publico:240,descuento:215,stock:20,img:'',notas:'500mg, 90 tabletas.'},
-    {id:'p7',sku:'A0233',nombre:'AMWAY HOME Multiusos',cat:'Hogar',costo:95,publico:145,descuento:130,stock:15,img:'',notas:'Limpieza general, sin enjuagar.'},
+    {id:'p1',sku:'110283',nombre:'Nutrilite Double X (EJEMPLO — puedes editar o eliminar)',cat:'Nutrición',puntos:120,costo:480,publico:720,descuento:650,stock:5,img:'',notas:'Este es un producto de ejemplo. Edítalo o elimínalo.'},
   ];
   save('products', products);
 }
 
 if(!clients.length){
   clients = [
-    {id:'c1',nombre:'María López',tel:'462-100-2233',dir:'Calle Hidalgo 45, Col. Centro',credito:1000,saldo:350,notas:''},
-    {id:'c2',nombre:'Jorge Ramírez',tel:'462-200-5544',dir:'Av. Insurgentes 12, Irapuato',credito:500,saldo:0,notas:'Prefiere pagar de contado.'},
-    {id:'c3',nombre:'Ana Flores',tel:'462-311-8800',dir:'Calle Roble 8, Fracc. Los Pinos',credito:1500,saldo:820,notas:'Clienta VIP'},
-    {id:'c4',nombre:'Luis Martínez',tel:'462-450-7722',dir:'Calle 5 de Mayo 99',credito:0,saldo:0,notas:''},
+    {id:'c1',nombre:'Cliente Ejemplo (puedes editar o eliminar)',tel:'462-000-0000',dir:'Dirección de ejemplo',credito:500,saldo:0,notas:'Este es un cliente de ejemplo.'},
   ];
   save('clients', clients);
 }
 
 if(!orders.length){
   orders = [
-    {id:'o1',folio:'PED-001',clienteId:'c1',items:[{prodId:'p1',qty:1,precio:720},{prodId:'p6',qty:2,precio:240}],tipoPrecio:'publico',fecha:'2025-05-10'},
-    {id:'o2',folio:'PED-002',clienteId:'c3',items:[{prodId:'p2',qty:1,precio:390},{prodId:'p5',qty:1,precio:510}],tipoPrecio:'descuento',fecha:'2025-05-12'},
-    {id:'o3',folio:'PED-003',clienteId:'c2',items:[{prodId:'p3',qty:1,precio:820},{prodId:'p4',qty:2,precio:185}],tipoPrecio:'publico',fecha:'2025-05-14'},
-    {id:'o4',folio:'PED-004',clienteId:'c4',items:[{prodId:'p1',qty:1,precio:720},{prodId:'p7',qty:3,precio:145}],tipoPrecio:'publico',fecha:'2025-05-15'},
-    {id:'o5',folio:'PED-005',clienteId:'c1',items:[{prodId:'p6',qty:3,precio:240}],tipoPrecio:'publico',fecha:'2025-05-16'},
+    {id:'o1',folio:'PED-001',clienteId:'c1',items:[{prodId:'p1',qty:1,precio:720}],tipoPrecio:'publico',fecha:'2025-05-17'},
   ];
   save('orders', orders);
 }
@@ -937,8 +947,16 @@ function renderDashboard(){
   document.getElementById('stat-productos').textContent=products.length;
   document.getElementById('stat-clientes').textContent=clients.length;
   document.getElementById('stat-pedidos').textContent=orders.length;
-  const valor=products.reduce((a,p)=>a+p.costo*p.stock,0);
-  document.getElementById('stat-valor').textContent=fmtShort(valor);
+
+  const invertido = products.reduce((a,p)=>a+p.costo*p.stock, 0);
+  const valorPub  = products.reduce((a,p)=>a+p.publico*p.stock, 0);
+  const ganPot    = valorPub - invertido;
+  const ganPct    = invertido>0 ? Math.round(ganPot/invertido*100) : 0;
+
+  document.getElementById('stat-valor').textContent       = fmtShort(invertido);
+  document.getElementById('stat-ganancia-pot').textContent= fmtShort(ganPot);
+  document.getElementById('stat-ganancia-pot-sub').textContent= `+${ganPct}% sobre tu inversión`;
+  document.getElementById('stat-valor-pub').textContent   = fmtShort(valorPub);
 
   // Top productos
   const salesMap={};
@@ -993,38 +1011,75 @@ function renderDashboard(){
 }
 
 // ── INVENTARIO ──
+let invSort = { col: 'nombre', dir: 1 };
+
+function sortInv(col){
+  if(invSort.col === col){ invSort.dir *= -1; }
+  else { invSort.col = col; invSort.dir = 1; }
+  renderInventario();
+}
+
 function renderInventario(){
-  const q=(document.getElementById('inv-search').value||'').toLowerCase();
-  const cat=document.getElementById('inv-cat').value;
+  const q   = (document.getElementById('inv-search').value||'').toLowerCase();
+  const cat = document.getElementById('inv-cat').value;
 
   // Poblar categorías
-  const cats=[...new Set(products.map(p=>p.cat).filter(Boolean))];
-  const catSel=document.getElementById('inv-cat');
-  const cur=catSel.value;
-  catSel.innerHTML='<option value="">Todas las categorías</option>'+cats.map(c=>`<option value="${c}"${c===cur?' selected':''}>${c}</option>`).join('');
+  const cats = [...new Set(products.map(p=>p.cat).filter(Boolean))];
+  const catSel = document.getElementById('inv-cat');
+  const cur = catSel.value;
+  catSel.innerHTML = '<option value="">Todas las categorías</option>'+cats.map(c=>`<option value="${c}"${c===cur?' selected':''}>${c}</option>`).join('');
 
-  const filtered=products.filter(p=>{
-    const matchQ=!q||(p.nombre.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q)||p.cat.toLowerCase().includes(q));
-    const matchC=!cat||p.cat===cat;
-    return matchQ&&matchC;
+  let filtered = products.filter(p=>{
+    const matchQ = !q||(p.nombre.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q)||(p.cat||'').toLowerCase().includes(q));
+    const matchC = !cat||p.cat===cat;
+    return matchQ && matchC;
   });
 
-  document.getElementById('inv-tbody').innerHTML=filtered.length?
+  // Ordenamiento
+  filtered = [...filtered].sort((a,b)=>{
+    let va, vb;
+    if(invSort.col==='gain'){
+      va = a.publico - a.costo;
+      vb = b.publico - b.costo;
+    } else {
+      va = a[invSort.col]||'';
+      vb = b[invSort.col]||'';
+    }
+    if(typeof va==='string') return va.localeCompare(vb)*invSort.dir;
+    return (va-vb)*invSort.dir;
+  });
+
+  // Actualizar íconos de sort
+  ['sku','nombre','cat','stock','puntos','costo','publico','descuento','gain'].forEach(c=>{
+    const el = document.getElementById('sort-'+c);
+    if(el) el.textContent = invSort.col===c ? (invSort.dir===1?'▲':'▼') : '⇅';
+  });
+
+  document.getElementById('inv-tbody').innerHTML = filtered.length ?
     filtered.map(p=>{
-      const gain=p.publico-p.costo;
-      const gainPct=p.costo>0?Math.round(gain/p.costo*100):0;
+      // Ganancia vs precio público (cuánto ganas sobre tu costo)
+      const gainPub  = p.publico - p.costo;
+      const gainPct  = p.costo>0 ? Math.round(gainPub/p.costo*100) : 0;
+      // Ganancia vs precio descuento (lo que a ti te sale)
+      const gainDesc = p.descuento - p.costo;
+      const gainDescPct = p.costo>0 ? Math.round(gainDesc/p.costo*100) : 0;
+      const gainColor = gainPub >= 0 ? 'badge-green' : 'badge-red';
       return `<tr>
-        <td class="td-mono" style="color:var(--text3)">${p.sku}</td>
+        <td class="td-mono" style="color:var(--text3)">${p.sku||'—'}</td>
         <td>
           <div style="font-weight:500">${p.nombre}</div>
           ${p.notas?`<div style="font-size:11px;color:var(--text3);margin-top:1px">${p.notas.slice(0,50)}${p.notas.length>50?'…':''}</div>`:''}
         </td>
         <td><span class="badge ${catColor(p.cat)}">${p.cat||'—'}</span></td>
         <td>${p.stock<=3?`<span class="badge badge-red">${p.stock}</span>`:`<span class="badge badge-gray">${p.stock}</span>`}</td>
-        <td class="td-mono">${fmt(p.costo)}</td>
+        <td class="td-mono" style="color:var(--gold);font-weight:500">${p.puntos||'—'} <span style="font-size:10px;color:var(--text3)">pts</span></td>
         <td class="td-mono" style="font-weight:500">${fmt(p.publico)}</td>
-        <td class="td-mono">${fmt(p.descuento)}</td>
-        <td><span class="badge badge-green">+${gainPct}%</span></td>
+        <td class="td-mono" style="color:var(--accent2)">${fmt(p.descuento)}</td>
+        <td>
+          <div><span class="badge ${gainColor}">${fmt(gainPub)}</span> <span style="font-size:11px;color:var(--text3)">pub</span></div>
+          <div style="margin-top:3px"><span class="badge badge-orange">${fmt(gainDesc)}</span> <span style="font-size:11px;color:var(--text3)">desc</span></div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">+${gainPct}% / +${gainDescPct}%</div>
+        </td>
         <td>
           <div style="display:flex;gap:4px">
             <button class="btn-icon" onclick="editProduct('${p.id}')" title="Editar">
@@ -1037,14 +1092,14 @@ function renderInventario(){
         </td>
       </tr>`;
     }).join('')
-    :`<tr><td colspan="9"><div class="empty-state"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><p>No se encontraron productos</p></div></td></tr>`;
+    :`<tr><td colspan="10"><div class="empty-state"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><p>No se encontraron productos</p></div></td></tr>`;
 }
 
 // ── PRODUCTO MODAL ──
-function openProductModal(id){
+function openProductModal(){
   document.getElementById('mpId').value='';
   document.getElementById('mpTitulo').textContent='Agregar producto';
-  ['mpSKU','mpNombre','mpCat','mpCosto','mpPct','mpPublico','mpDescuento','mpStock','mpImg','mpNotas']
+  ['mpSKU','mpNombre','mpCat','mpPuntos','mpCosto','mpPublico','mpDescuento','mpStock','mpImg','mpNotas']
     .forEach(f=>document.getElementById(f).value='');
   openModal('modalProducto');
 }
@@ -1054,33 +1109,24 @@ function editProduct(id){
   if(!p) return;
   document.getElementById('mpId').value=p.id;
   document.getElementById('mpTitulo').textContent='Editar producto';
-  document.getElementById('mpSKU').value=p.sku;
+  document.getElementById('mpSKU').value=p.sku||'';
   document.getElementById('mpNombre').value=p.nombre;
-  document.getElementById('mpCat').value=p.cat;
-  document.getElementById('mpCosto').value=p.costo;
-  document.getElementById('mpPublico').value=p.publico;
-  document.getElementById('mpDescuento').value=p.descuento;
-  document.getElementById('mpStock').value=p.stock;
+  document.getElementById('mpCat').value=p.cat||'';
+  document.getElementById('mpPuntos').value=p.puntos||'';
+  document.getElementById('mpCosto').value=p.costo||'';
+  document.getElementById('mpPublico').value=p.publico||'';
+  document.getElementById('mpDescuento').value=p.descuento||'';
+  document.getElementById('mpStock').value=p.stock||0;
   document.getElementById('mpImg').value=p.img||'';
   document.getElementById('mpNotas').value=p.notas||'';
-  const pct=p.costo>0?Math.round((p.publico/p.costo-1)*100):0;
-  document.getElementById('mpPct').value=pct;
   openModal('modalProducto');
 }
 
 function calcPreciosModal(){
-  const costo=parseFloat(document.getElementById('mpCosto').value)||0;
-  const pct=parseFloat(document.getElementById('mpPct').value)||0;
-  if(costo>0 && pct>0){
-    document.getElementById('mpPublico').value=(costo*(1+pct/100)).toFixed(2);
-  }
+  // mantenemos por compatibilidad pero ya no auto-calcula precio público
 }
 function calcPctModal(){
-  const costo=parseFloat(document.getElementById('mpCosto').value)||0;
-  const pub=parseFloat(document.getElementById('mpPublico').value)||0;
-  if(costo>0 && pub>0){
-    document.getElementById('mpPct').value=Math.round((pub/costo-1)*100);
-  }
+  // mantenemos por compatibilidad
 }
 
 function saveProduct(){
@@ -1090,6 +1136,7 @@ function saveProduct(){
     sku:document.getElementById('mpSKU').value.trim(),
     nombre:document.getElementById('mpNombre').value.trim(),
     cat:document.getElementById('mpCat').value.trim(),
+    puntos:parseFloat(document.getElementById('mpPuntos').value)||0,
     costo:parseFloat(document.getElementById('mpCosto').value)||0,
     publico:parseFloat(document.getElementById('mpPublico').value)||0,
     descuento:parseFloat(document.getElementById('mpDescuento').value)||0,
@@ -1407,26 +1454,22 @@ function renderAnalisis(){
 // ══════════════════════════════════════════════
 function downloadTemplate(){
   const headers = [
-    'ID_Producto','Nombre','Categoria','Costo','Precio_Publico','Precio_Descuento','Stock','Notas'
+    'ID_Producto','Nombre','Categoria','Puntos','Costo','Precio_Publico','A_Mi_Me_Sale','Stock','Notas'
   ];
   const ejemplos = [
-    ['110283','Nutrilite Double X','Nutricion',480,720,650,5,'Multivitaminico premium. 1 toma diaria.'],
-    ['G0285','ARTISTRY Studio BB Cream','Belleza',290,430,390,8,'FPS 30, varios tonos.'],
-    ['A0512','AMWAY HOME Lavavajillas','Hogar',120,185,165,12,'Concentrado, rinde 2x mas.'],
+    ['110283','Nutrilite Double X','Nutricion',120,480,720,650,5,'Multivitaminico premium. 1 toma diaria.'],
+    ['G0285','ARTISTRY Studio BB Cream','Belleza',72,290,430,390,8,'FPS 30, varios tonos.'],
+    ['A0512','AMWAY HOME Lavavajillas','Hogar',30,120,185,165,12,'Concentrado, rinde 2x mas.'],
   ];
 
   const ws = XLSX.utils.aoa_to_sheet([headers, ...ejemplos]);
-
-  // Anchos de columna
   ws['!cols'] = [
-    {wch:14},{wch:36},{wch:18},{wch:10},{wch:16},{wch:18},{wch:8},{wch:40}
+    {wch:14},{wch:36},{wch:18},{wch:8},{wch:10},{wch:16},{wch:16},{wch:8},{wch:40}
   ];
 
-  // Estilo de encabezado (solo disponible en xlsx con estilos, usamos comentario aclaratorio)
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Productos');
 
-  // Hoja de instrucciones
   const instrData = [
     ['INSTRUCCIONES PARA LLENAR LA PLANTILLA'],
     [''],
@@ -1434,20 +1477,20 @@ function downloadTemplate(){
     ['ID_Producto','Codigo o numero de referencia del producto (puede ser el de Amway)','110283'],
     ['Nombre','Nombre completo del producto','Nutrilite Double X'],
     ['Categoria','Grupo al que pertenece: Nutricion, Belleza, Hogar, Cuidado personal, etc.','Nutricion'],
-    ['Costo','Cuanto te cuesta a ti (precio de distribuidor)','480'],
-    ['Precio_Publico','Precio al que lo vendes normalmente','720'],
-    ['Precio_Descuento','Precio especial o con descuento','650'],
+    ['Puntos','Puntos Amway del producto (unidad separada del precio)','120'],
+    ['Costo','Cuanto te cuesta a ti en pesos (precio de distribuidor)','480'],
+    ['Precio_Publico','Precio al que lo vendes normalmente al cliente','720'],
+    ['A_Mi_Me_Sale','El precio con descuento (lo que a ti te cuesta comprarlo por tu nivel)','650'],
     ['Stock','Cuantas unidades tienes en tu inventario ahora mismo','5'],
     ['Notas','Descripcion, beneficios, observaciones (opcional)','Tomar 1 al dia con alimentos'],
     [''],
     ['IMPORTANTE:'],
     ['- No cambies los nombres de las columnas (primera fila)'],
-    ['- Puedes agregar o quitar filas de ejemplo, deja solo tus productos reales'],
-    ['- Los campos de precio y stock deben ser numeros sin simbolo de peso ($)'],
+    ['- Los campos numericos deben ser numeros sin simbolo de peso ($) ni comas'],
     ['- Guarda el archivo como .xlsx antes de subirlo'],
   ];
   const wsInstr = XLSX.utils.aoa_to_sheet(instrData);
-  wsInstr['!cols'] = [{wch:18},{wch:55},{wch:35}];
+  wsInstr['!cols'] = [{wch:18},{wch:58},{wch:35}];
   XLSX.utils.book_append_sheet(wb, wsInstr, 'Instrucciones');
 
   XLSX.writeFile(wb, 'plantilla-productos.xlsx');
@@ -1460,25 +1503,19 @@ function downloadTemplate(){
 function importExcel(input){
   const file = input.files[0];
   if(!file){ return; }
-  input.value = ''; // reset para poder subir el mismo archivo de nuevo
+  input.value = '';
 
   const reader = new FileReader();
   reader.onload = function(e){
     try {
       const data = new Uint8Array(e.target.result);
       const wb   = XLSX.read(data, {type:'array'});
-
-      // Buscar la hoja "Productos" o usar la primera
       const sheetName = wb.SheetNames.includes('Productos') ? 'Productos' : wb.SheetNames[0];
       const ws = wb.Sheets[sheetName];
       const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
 
-      if(!rows.length){
-        toast('El archivo está vacío o no tiene datos');
-        return;
-      }
+      if(!rows.length){ toast('El archivo está vacío o no tiene datos'); return; }
 
-      // Mapa flexible de columnas (acepta variaciones de nombre)
       function getCol(row, ...keys){
         for(const k of keys){
           const found = Object.keys(row).find(c => c.trim().toLowerCase().replace(/[_\s]/g,'') === k.toLowerCase().replace(/[_\s]/g,''));
@@ -1496,40 +1533,38 @@ function importExcel(input){
 
         const sku    = String(getCol(row,'ID_Producto','ID','SKU','codigo','ref') || '').trim();
         const cat    = String(getCol(row,'Categoria','categoria','category','cat') || '').trim();
+        const puntos = parseFloat(getCol(row,'Puntos','puntos','points','pts') || 0);
         const costo  = parseFloat(getCol(row,'Costo','costo','cost','precio_costo') || 0);
         const pub    = parseFloat(getCol(row,'Precio_Publico','PrecioPublico','publico','precio_publico','precio') || 0);
-        const desc   = parseFloat(getCol(row,'Precio_Descuento','PrecioDescuento','descuento','precio_descuento') || pub);
+        const desc   = parseFloat(getCol(row,'A_Mi_Me_Sale','AMiMeSale','Descuento','PrecioDescuento','descuento','precio_descuento') || pub);
         const stock  = parseInt(getCol(row,'Stock','stock','inventario','existencia') || 0);
         const notas  = String(getCol(row,'Notas','notas','descripcion','notes') || '').trim();
 
-        if(pub < costo && pub > 0){
+        if(pub > 0 && pub < costo){
           errores.push(`Fila ${i+2}: "${nombre}" — precio público menor al costo`);
         }
 
-        // Buscar si ya existe por SKU o nombre
         const existingIdx = products.findIndex(p =>
           (sku && p.sku === sku) || p.nombre.toLowerCase() === nombre.toLowerCase()
         );
 
         const obj = {
           id: existingIdx >= 0 ? products[existingIdx].id : uid(),
-          sku, nombre, cat,
-          costo: costo || 0,
-          publico: pub || 0,
-          descuento: desc || pub || 0,
-          stock: stock || 0,
-          img: existingIdx >= 0 ? (products[existingIdx].img || '') : '',
+          sku, nombre, cat, puntos,
+          costo: costo||0, publico: pub||0,
+          descuento: desc||pub||0,
+          stock: stock||0,
+          img: existingIdx >= 0 ? (products[existingIdx].img||'') : '',
           notas,
         };
 
-        if(existingIdx >= 0){ products[existingIdx] = obj; actualizados++; }
-        else { products.push(obj); agregados++; }
+        if(existingIdx >= 0){ products[existingIdx]=obj; actualizados++; }
+        else{ products.push(obj); agregados++; }
       });
 
       save('products', products);
       renderInventario();
 
-      // Mostrar resultado
       const msgEl = document.getElementById('import-msg');
       let msg = `${agregados} producto${agregados!==1?'s':''} nuevo${agregados!==1?'s':''} agregado${agregados!==1?'s':''}, ${actualizados} actualizado${actualizados!==1?'s':''}.`;
       if(omitidos) msg += ` ${omitidos} fila${omitidos!==1?'s':''} omitida${omitidos!==1?'s':''} (sin nombre).`;
